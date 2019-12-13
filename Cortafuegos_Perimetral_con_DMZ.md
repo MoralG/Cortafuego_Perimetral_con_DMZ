@@ -74,24 +74,70 @@ sudo iptables -P FORWARD DROP
 
 ##### Reglas
 
-sudo iptables -I INPUT -p tcp -s 172.22.0.0/16 -m multiport --dports 2222:22 -j ACCEPT
-sudo iptables -I OUTPUT -p tcp -d 172.22.0.0/16 -m multiport --sports 2222:22 -j ACCEPT
+###### Hay que activar el 'ip_forward'
+~~~
+sudo su
+echo 1 > /proc/sys/net/ipv4/ip_forward
+exit
+~~~
 
-sudo iptables -A OUTPUT -p tcp -m multiport --dports 22:2222 -j ACCEPT
+###### Configuramos la redirecion del puerto 2222 al 22
+~~~
+sudo iptables -t nat -I PREROUTING -p tcp -s 172.22.0.0/16 --dport 2222 -j REDIRECT --to-ports 22
+~~~
+
+###### Configuramos la regla para que se pueda hacer conexión desde el puerto 2222
+~~~
+sudo iptables -A INPUT -s 172.22.0.0/16 -p tcp -m tcp --dport 2222 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A OUTPUT -d 172.22.0.0/16 -p tcp -m tcp --sport 2222 -m state --state ESTABLISHED -j ACCEPT
+
+sudo iptables -A INPUT -s 172.23.0.0/16 -p tcp -m tcp --dport 2222 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A OUTPUT -d 172.23.0.0/16 -p tcp -m tcp --sport 2222 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+###### Bloquemos la conexión desde el puerto 22 redirigiendola al Loopback para que se pierda
+~~~
+sudo iptables -t nat -I PREROUTING -p tcp -s 172.22.0.0/16 --dport 22 --jump DNAT --to-destination 127.0.0.1
+~~~
 
 ##### Comprobación
 ~~~
-moralg@padano:~$ ssh -p 2222 debian@172.22.200.145
-Linux dmz 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20) x86_64
+moralg@padano:~$ ssh -A -p 2222 debian@172.22.200.145
+    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    @    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!
+    Someone could be eavesdropping on you right now (man-in-the-middle attack)!
+    It is also possible that a host key has just been changed.
+    The fingerprint for the ECDSA key sent by the remote host is
+    SHA256:fnmA6k3OIDwXzXVMgrL3g+JjSjlmzRTU0Ou2xYwDdaE.
+    Please contact your system administrator.
+    Add correct host key in /home/moralg/.ssh/known_hosts to get rid of this message.
+    Offending ECDSA key in /home/moralg/.ssh/known_hosts:40
+      remove with:
+      ssh-keygen -f "/home/moralg/.ssh/known_hosts" -R "[172.22.200.145]:2222"
+    ECDSA host key for [172.22.200.145]:2222 has changed and you have requested strict  checking.
+    Host key verification failed.
 
-The programs included with the Debian GNU/Linux system are free software;
-the exact distribution terms for each program are described in the
-individual files in /usr/share/doc/*/copyright.
+moralg@padano:~$   ssh-keygen -f "/home/moralg/.ssh/known_hosts" -R "[172.22.200.145]   :2222"
+    # Host [172.22.200.145]:2222 found: line 40
+    /home/moralg/.ssh/known_hosts updated.
+    Original contents retained as /home/moralg/.ssh/known_hosts.old
+    moralg@padano:~$ ssh -A -p 2222 debian@172.22.200.145
+    Linux router-fw 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20)   x86_64
 
-Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
-permitted by applicable law.
-Last login: Thu Dec 12 16:26:44 2019 from 172.23.0.54
-debian@dmz:~$
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Fri Dec 13 10:02:20 2019 from 172.22.1.248
+
+debian@router-fw:~$ exit
+
+moralg@padano:~$ ssh -A -p 22 debian@172.22.200.145
+    ssh: connect to host 172.22.200.145 port 22: Connection timed out
 ~~~
 
 #### 2. Desde la LAN y la DMZ se debe permitir la conexión ssh por el puerto 22 al la máquina router-fw.
@@ -100,37 +146,127 @@ debian@dmz:~$
 
 ###### LAN
 ~~~
-sudo iptables -A INPUT -s 192.168.100.10 --sport 22 -p tcp -j ACCEPT
-sudo iptables -A OUTPUT -d 192.168.100.10 --dport 22 -p tcp -j ACCEPT
+sudo iptables -A INPUT -s 192.168.100.10/24 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A OUTPUT -d 192.168.100.10/24 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
 ~~~
 
 ###### DMZ
 ~~~
-sudo iptables -A INPUT -s 192.168.200.10 --sport 22 -p tcp -j ACCEPT
-sudo iptables -A OUTPUT -d 192.168.200.10 --dport 22 -p tcp -j ACCEPT
+sudo iptables -A INPUT -s 192.168.200.10/16 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A OUTPUT -d 192.168.200.10/16 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
 ~~~
 
 ##### Comprobación
+
+###### LAN
+~~~
+debian@router-fw:~$ ssh -A debian@192.168.100.10
+    Linux lan 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20) x86_64
+
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Fri Dec 13 11:53:58 2019 from 192.168.100.2
+
+debian@lan:~$ ssh debian@192.168.100.2
+    The authenticity of host '192.168.100.2 (192.168.100.2)' can't be established.
+    ECDSA key fingerprint is SHA256:fnmA6k3OIDwXzXVMgrL3g+JjSjlmzRTU0Ou2xYwDdaE.
+    Are you sure you want to continue connecting (yes/no)? yes
+    Warning: Permanently added '192.168.100.2' (ECDSA) to the list of known hosts.
+    Linux router-fw 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20)   x86_64
+
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Fri Dec 13 12:01:34 2019 from 172.22.1.248
+
+debian@router-fw:~$ exit
 ~~~
 
+###### DMZ
 ~~~
+debian@router-fw:~$ ssh -A debian@192.168.200.10
+    Linux dmz 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20) x86_64
 
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Fri Dec 13 11:23:14 2019 from 192.168.200.2
+
+debian@dmz:~$ ssh debian@192.168.200.2
+    The authenticity of host '192.168.200.2 (192.168.200.2)' can't be established.
+    ECDSA key fingerprint is SHA256:fnmA6k3OIDwXzXVMgrL3g+JjSjlmzRTU0Ou2xYwDdaE.
+    Are you sure you want to continue connecting (yes/no)? yes
+    Warning: Permanently added '192.168.200.2' (ECDSA) to the list of known hosts.
+    Linux router-fw 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20)   x86_64
+
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Fri Dec 13 12:02:10 2019 from 192.168.100.10
+
+debian@router-fw:~$ exit
+~~~
 
 #### 3. La máquina router-fw debe tener permitido el tráfico para la interfaz loopback.
 
 ##### Reglas
 ~~~
-
+sudo iptables -A INPUT -i lo -p icmp -j ACCEPT
+sudo iptables -A OUTPUT -o lo -p icmp -j ACCEPT
 ~~~
 
 ##### Comprobación
 ~~~
+debian@router-fw:~$ ping 127.0.0.1
+    PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+    ping: sendmsg: Operation not permitted
+    ping: sendmsg: Operation not permitted
+    ^Lping: sendmsg: Operation not permitted
+    ping: sendmsg: Operation not permitted
+    ping: sendmsg: Operation not permitted
+    ^C
+    --- 127.0.0.1 ping statistics ---
+    5 packets transmitted, 0 received, 100% packet loss, time 105ms
 
+debian@router-fw:~$ sudo iptables -A INPUT -i lo -p icmp -j ACCEPT
+debian@router-fw:~$ sudo iptables -A OUTPUT -o lo -p icmp -j ACCEPT
+
+debian@router-fw:~$ ping 127.0.0.1
+    PING 127.0.0.1 (127.0.0.1) 56(84) bytes of data.
+    64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.050 ms
+    64 bytes from 127.0.0.1: icmp_seq=2 ttl=64 time=0.048 ms
+    64 bytes from 127.0.0.1: icmp_seq=3 ttl=64 time=0.074 ms
+    64 bytes from 127.0.0.1: icmp_seq=4 ttl=64 time=0.064 ms
+    ^C
+    --- 127.0.0.1 ping statistics ---
+    4 packets transmitted, 4 received, 0% packet loss, time 77ms
+    rtt min/avg/max/mdev = 0.048/0.059/0.074/0.010 ms
 ~~~
 
 #### 4. A la máquina router-fw se le puede hacer ping desde la DMZ, pero desde la LAN se le debe rechazar la conexión (REJECT).
 
 ##### Reglas
+
+###### LAN (limitamos la conexión a 3)
+~~~
+sudo iptables -A INPUT -s 192.168.100.10/24 -p icmp -m connlimit --connlimit-above 3 -j REJECT
+
+~~~
+
+###### DMZ
 ~~~
 
 ~~~
@@ -143,13 +279,61 @@ sudo iptables -A OUTPUT -d 192.168.200.10 --dport 22 -p tcp -j ACCEPT
 #### 5. La máquina router-fw puede hacer ping a la LAN, la DMZ y al exterior.
 
 ##### Reglas
+
+###### LAN
+~~~
+sudo iptables -A INPUT -s 192.168.100.10/16 -p icmp -j ACCEPT
+sudo iptables -A OUTPUT -d 192.168.100.10/16 -p icmp -j ACCEPT
 ~~~
 
+###### DMZ
+~~~
+sudo iptables -A INPUT -s 192.168.200.10/16 -p icmp -j ACCEPT
+sudo iptables -A OUTPUT -d 192.168.200.10/16 -p icmp -j ACCEPT
+~~~
+
+###### Exterior
+~~~
+sudo iptables -A INPUT -i eth0 -p icmp -j ACCEPT
+sudo iptables -A OUTPUT -o eth0 -p icmp -j ACCEPT
 ~~~
 
 ##### Comprobación
+
+###### LAN
+~~~
+debian@router-fw:~$ ping 192.168.100.10
+    PING 192.168.100.10 (192.168.100.10) 56(84) bytes of data.
+    64 bytes from 192.168.100.10: icmp_seq=1 ttl=64 time=0.920 ms
+    64 bytes from 192.168.100.10: icmp_seq=2 ttl=64 time=0.738 ms
+    ^C
+    --- 192.168.100.10 ping statistics ---
+    2 packets transmitted, 2 received, 0% packet loss, time 2ms
+    rtt min/avg/max/mdev = 0.738/0.829/0.920/0.091 ms
 ~~~
 
+###### DMZ
+~~~
+debian@router-fw:~$ ping 192.168.200.10
+    PING 192.168.200.10 (192.168.200.10) 56(84) bytes of data.
+    64 bytes from 192.168.200.10: icmp_seq=1 ttl=64 time=1.45 ms
+    64 bytes from 192.168.200.10: icmp_seq=2 ttl=64 time=1.09 ms
+    ^C
+    --- 192.168.200.10 ping statistics ---
+    2 packets transmitted, 2 received, 0% packet loss, time 3ms
+    rtt min/avg/max/mdev = 1.088/1.268/1.449/0.183 ms
+~~~
+
+###### Exterior
+~~~
+debian@router-fw:~$ ping 1.1.1.1
+    PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.
+    64 bytes from 1.1.1.1: icmp_seq=1 ttl=54 time=43.9 ms
+    64 bytes from 1.1.1.1: icmp_seq=2 ttl=54 time=42.7 ms
+    ^C
+    --- 1.1.1.1 ping statistics ---
+    2 packets transmitted, 2 received, 0% packet loss, time 3ms
+    rtt min/avg/max/mdev = 42.713/43.325/43.938/0.646 ms
 ~~~
 
 #### 6. Desde la máquina DMZ se puede hacer ping y conexión ssh a la máquina LAN.
