@@ -2,20 +2,19 @@
 
 ![DMZ](image/DMZ.png)
 
-### Esquema de red
+## Esquema de red
 ------------------------------------------------------------------------------------------------
 #### Vamos a utilizar tres máquinas en openstack, que vamos a crear con la receta heat: escenario3.yaml. La receta heat ha deshabilitado el cortafuego que nos ofrece openstack (todos los puertos de todos los protocolos están abiertos). Una máquina (que tiene asignada una IP flotante) hará de cortafuegos, otra será una máquina de la red interna 192.168.100.0/24 y la tercera será un servidor en la DMZ donde iremos instalando distintos servicios y estará en la red 192.168.200.0/24.
 
-### Cumplimientos:
+## Cumplimientos
 ------------------------------------------------------------------------------------------------
 #### Configurar un cortafuegos perimetral en la máquina router-fw teniendo en cuenta los siguientes puntos:
 
 * Política por defecto DROP para las cadenas INPUT, FORWARD y OUTPUT.
 * Se pueden usar las extensiones que queremos adecuadas, pero al menos debe implementarse seguimiento de la conexión.
-* Debemos implementar que el cortafuego funcione después de un reinicio de la máquina.
 * Debes indicar pruebas de funcionamiento de todos las reglas.
 
-### Tareas:
+## Tareas
 --------------------------------------------------------------------------------------------------
 #### [Tarea 1](https://github.com/MoralG/Cortafuego_Perimetral_con_DMZ/blob/master/Cortafuegos_Perimetral_con_DMZ.md#1-la-m%C3%A1quina-router-fw-tiene-un-servidor-ssh-escuchando-por-el-puerto-22-pero-al-acceder-desde-el-exterior-habr%C3%A1-que-conectar-al-puerto-2222). La máquina router-fw tiene un servidor ssh escuchando por el puerto 22, pero al acceder desde el exterior habrá que conectar al puerto 2222.
 
@@ -47,8 +46,11 @@
 
 #### [Tarea 15](https://github.com/MoralG/Cortafuego_Perimetral_con_DMZ/blob/master/Cortafuegos_Perimetral_con_DMZ.md#15-en-la-m%C3%A1quina-lan-instala-un-servidor-mysql-a-este-servidor-s%C3%B3lo-se-puede-acceder-desde-la-dmz). En la máquina LAN instala un servidor mysql. A este servidor sólo se puede acceder desde la DMZ.
 
-### Si crees que necesitas más reglas de las que nos han indicado, describe porque pueden ser necesarias.
+## Mejoras
 ------------------------------------------------------------------------------------------------
-#### [MEJORA](https://github.com/MoralG/Cortafuego_Perimetral_con_DMZ/blob/master/Cortafuegos_Perimetral_con_DMZ.md#mejora-utiliza-nuevas-cadenas-para-clasificar-el-tr%C3%A1fico): Utiliza nuevas cadenas para clasificar el tráfico.
 
-#### [MEJORA](https://github.com/MoralG/Cortafuego_Perimetral_con_DMZ/blob/master/Cortafuegos_Perimetral_con_DMZ.md#mejora-consruye-el-cortafuego-utilizando-nftables): Consruye el cortafuego utilizando nftables.
+#### [MEJORA 1](): Implementar que el cortafuego funcione después de un reinicio de la máquina.
+
+#### [MEJORA 2](https://github.com/MoralG/Cortafuego_Perimetral_con_DMZ/blob/master/Cortafuegos_Perimetral_con_DMZ.md#mejora-utiliza-nuevas-cadenas-para-clasificar-el-tr%C3%A1fico): Utiliza nuevas cadenas para clasificar el tráfico.
+
+#### [MEJORA 3](https://github.com/MoralG/Cortafuego_Perimetral_con_DMZ/blob/master/Cortafuegos_Perimetral_con_DMZ.md#mejora-consruye-el-cortafuego-utilizando-nftables): Consruye el cortafuego utilizando nftables.

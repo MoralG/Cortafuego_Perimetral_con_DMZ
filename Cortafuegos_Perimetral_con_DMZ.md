@@ -1,31 +1,15 @@
 # Cortafuegos perimetral con DMZ
 
-### Esquema de red
-
-----------------------------------------------------------------------------------
-
+## Esquema de red
+------------------------------------------------------------------------------------------------
 #### Vamos a utilizar tres máquinas en openstack, que vamos a crear con la receta heat: escenario3.yaml. La receta heat ha deshabilitado el cortafuego que nos ofrece openstack (todos los puertos de todos los protocolos están abiertos). Una máquina (que tiene asignada una IP flotante) hará de cortafuegos, otra será una máquina de la red interna 192.168.100.0/24 y la tercera será un servidor en la DMZ donde iremos instalando distintos servicios y estará en la red 192.168.200.0/24.
 
-### Ejercicios
+![Tarea1.1](image/Tarea1.1_DMZ.png)
 
-> Para listar las reglas de IPTABLES:
-~~~
-sudo iptables -L -nv --line-numbers
-~~~
-> Para eliminar las reglas de IPTABLES:
-~~~
-sudo iptables -D INPUT <number>
-sudo iptables -D OUTPUT <number>
-~~~
-> Para listar las reglas de NAT
-~~~
-sudo iptables -t nat -L -nv --line-numbers
-~~~
-
-### Configurar un cortafuegos perimetral en la máquina router-fw teniendo en cuenta los siguientes puntos:
+## Cumplimientos
+------------------------------------------------------------------------------------------------
 
 * #### Política por defecto DROP para las cadenas INPUT, FORWARD y OUTPUT.
-----------------------------------------------------
 
 ###### Limpiamos las tablas.
 
@@ -60,17 +44,14 @@ sudo iptables -P OUTPUT DROP
 sudo iptables -P FORWARD DROP
 ~~~
 
+* Se pueden usar las extensiones que queremos adecuadas, pero al menos debe implementarse seguimiento de la conexión.
+* Debes indicar pruebas de funcionamiento de todos las reglas.
 
-* #### Se pueden usar las extensiones que queremos adecuadas, pero al menos debe implementarse seguimiento de la conexión.
 
-* #### Debemos implementar que el cortafuego funcione después de un reinicio de la máquina.
+## Tareas
+--------------------------------------------------------------------------------------------------
 
-* #### Debes indicar pruebas de funcionamiento de todos las reglas.
-
-* #### El cortafuego debe cumplir al menos estas reglas:
-----------------------------------------------------
-
-#### 1. La máquina router-fw tiene un servidor ssh escuchando por el puerto 22, pero al acceder desde el exterior habrá que conectar al puerto 2222.
+### Tarea 1. La máquina router-fw tiene un servidor ssh escuchando por el puerto 22, pero al acceder desde el exterior habrá que conectar al puerto 2222.
 
 ##### Reglas
 
@@ -144,7 +125,7 @@ moralg@padano:~$ ssh -A -p 22 debian@172.22.200.145
     ssh: connect to host 172.22.200.145 port 22: Connection timed out
 ~~~
 
-#### 2. Desde la LAN y la DMZ se debe permitir la conexión ssh por el puerto 22 al la máquina router-fw.
+### Tarea 2. Desde la LAN y la DMZ se debe permitir la conexión ssh por el puerto 22 al la máquina router-fw.
 
 ##### Reglas
 
@@ -224,7 +205,7 @@ debian@dmz:~$ ssh debian@192.168.200.2
 debian@router-fw:~$ exit
 ~~~
 
-#### 3. La máquina router-fw debe tener permitido el tráfico para la interfaz loopback.
+### Tarea 3. La máquina router-fw debe tener permitido el tráfico para la interfaz loopback.
 
 ##### Reglas
 ~~~
@@ -260,7 +241,7 @@ debian@router-fw:~$ ping 127.0.0.1
     rtt min/avg/max/mdev = 0.048/0.059/0.074/0.010 ms
 ~~~
 
-#### 4. A la máquina router-fw se le puede hacer ping desde la DMZ, pero desde la LAN se le debe rechazar la conexión (REJECT).
+### Tarea 4. A la máquina router-fw se le puede hacer ping desde la DMZ, pero desde la LAN se le debe rechazar la conexión (REJECT).
 
 ##### Reglas
 
@@ -307,7 +288,7 @@ debian@dmz:~$ ping 192.168.200.2
     rtt min/avg/max/mdev = 0.896/1.070/1.145/0.098 ms
 ~~~
 
-#### 5. La máquina router-fw puede hacer ping a la LAN, la DMZ y al exterior.
+### Tarea 5. La máquina router-fw puede hacer ping a la LAN, la DMZ y al exterior.
 
 ##### Reglas
 
@@ -376,7 +357,231 @@ debian@router-fw:~$ ping 1.1.1.1
     rtt min/avg/max/mdev = 41.032/41.874/42.950/0.673 ms
 ~~~
 
-#### 6. Desde la máquina DMZ se puede hacer ping y conexión ssh a la máquina LAN.
+### Tarea 6. Desde la máquina DMZ se puede hacer ping y conexión ssh a la máquina LAN.
+
+##### Reglas
+
+###### SSH
+~~~
+sudo iptables -A FORWARD -i eth2 -o eth1 -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth1 -o eth2 -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+###### PING
+~~~
+sudo iptables -A FORWARD -i eth2 -o eth1 -s 192.168.200.0/24 -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+sudo iptables -A FORWARD -i eth1 -o eth2 -d 192.168.200.0/24 -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+~~~
+
+##### Comprobación
+###### SSH
+~~~
+debian@dmz:~$ ssh 192.168.100.10
+    The authenticity of host '192.168.100.10 (192.168.100.10)' can't be established.
+    ECDSA key fingerprint is SHA256:YZMnTboVGppp2MCQN/Jz89AI3MR/Rx9pnQrB/R4jmJk.
+    Are you sure you want to continue connecting (yes/no)? yes
+    Warning: Permanently added '192.168.100.10' (ECDSA) to the list of known hosts.
+    Linux lan 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20) x86_64
+
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Tue Dec 31 16:44:04 2019 from 192.168.100.2
+
+debian@lan:~$ exit
+~~~
+
+###### PING
+~~~
+debian@dmz:~$ ping 192.168.100.10
+    PING 192.168.100.10 (192.168.100.10) 56(84) bytes of data.
+    64 bytes from 192.168.100.10: icmp_seq=1 ttl=63 time=1.62 ms
+    64 bytes from 192.168.100.10: icmp_seq=2 ttl=63 time=1.49 ms
+    64 bytes from 192.168.100.10: icmp_seq=3 ttl=63 time=1.87 ms
+    64 bytes from 192.168.100.10: icmp_seq=4 ttl=63 time=1.59 ms
+    64 bytes from 192.168.100.10: icmp_seq=5 ttl=63 time=1.47 ms
+    ^C
+    --- 192.168.100.10 ping statistics ---
+    5 packets transmitted, 5 received, 0% packet loss, time 12ms
+    rtt min/avg/max/mdev = 1.465/1.607/1.867/0.144 ms
+~~~
+
+### Tarea 7. Desde la máquina LAN no se puede hacer ping, pero si se puede conectar por ssh a la máquina DMZ.
+
+##### Reglas
+###### SSH
+~~~
+sudo iptables -A FORWARD -i eth1 -o eth2 -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth2 -o eth1 -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+###### PING
+> Por defecto esta en DROP
+
+
+##### Comprobación
+###### SSH
+~~~
+debian@lan:~$ ssh 192.168.200.10
+    The authenticity of host '192.168.200.10 (192.168.200.10)' can't be established.
+    ECDSA key fingerprint is SHA256:HDhQ4dDIMfEt0p916tj987SZjuhmhqd+qEjGNLikwN8.
+    Are you sure you want to continue connecting (yes/no)? yes
+    Warning: Permanently added '192.168.200.10' (ECDSA) to the list of known hosts.
+    Linux dmz 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20) x86_64
+
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Tue Dec 31 16:46:29 2019 from 192.168.200.2
+
+debian@dmz:~$ exit
+~~~
+
+###### PING
+~~~
+debian@lan:~$ ping 192.168.200.10
+    PING 192.168.200.10 (192.168.200.10) 56(84) bytes of data.
+    ^C
+    --- 192.168.200.10 ping statistics ---
+    247 packets transmitted, 0 received, 100% packet loss, time 1150ms
+~~~
+
+### Tarea 8. Configura la máquina router-fw para que las máquinas LAN y DMZ puedan acceder al exterior.
+
+###### Añadimos las reglas de SNAT para que las máquinas internas puedan acceder al exterior
+~~~
+sudo iptables -t nat -A POSTROUTING -s 192.168.100.0/24 -o eth0 -j MASQUERADE
+sudo iptables -t nat -A POSTROUTING -s 192.168.200.0/24 -o eth0 -j MASQUERADE
+~~~
+
+### Tarea 9. La máquina LAN se le permite hacer ping al exterior.
+
+##### Reglas
+~~~
+sudo iptables -A FORWARD -i eth1 -o eth0 -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth1 -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+~~~
+
+##### Comprobación
+~~~
+debian@lan:~$ ping 1.1.1.1
+    PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.
+    64 bytes from 1.1.1.1: icmp_seq=1 ttl=54 time=42.6 ms
+    64 bytes from 1.1.1.1: icmp_seq=2 ttl=54 time=41.10 ms
+    64 bytes from 1.1.1.1: icmp_seq=3 ttl=54 time=68.3 ms
+    64 bytes from 1.1.1.1: icmp_seq=4 ttl=54 time=66.2 ms
+    64 bytes from 1.1.1.1: icmp_seq=5 ttl=54 time=43.0 ms
+    ^C
+    --- 1.1.1.1 ping statistics ---
+    5 packets transmitted, 5 received, 0% packet loss, time 11ms
+    rtt min/avg/max/mdev = 41.959/52.429/68.349/12.161 ms
+~~~
+
+### Tarea 10. La máquina LAN puede navegar.
+
+##### Reglas
+###### Activamos DNS
+~~~
+sudo iptables -A FORWARD -i eth1 -o eth0 -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth1 -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+###### Activamos HTTP
+~~~
+sudo iptables -A FORWARD -i eth1 -o eth0 -p tcp -m multiport --dports 80 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth1 -p tcp -m multiport --sports 80 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+###### Activamos HTTPS
+~~~
+sudo iptables -A FORWARD -i eth1 -o eth0 -p tcp -m multiport --dports 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth1 -p tcp -m multiport --sports 443 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+##### Comprobación
+###### Descargamos un paquete
+~~~
+debian@lan:~$ sudo apt install tree
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+The following NEW packages will be installed:
+  tree
+0 upgraded, 1 newly installed, 0 to remove and 37 not upgraded.
+Need to get 49.3 kB of archives.
+After this operation, 117 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian buster/main amd64 tree amd64 1.8.0-1 [49.3 kB]
+Fetched 49.3 kB in 0s (247 kB/s)
+Selecting previously unselected package tree.
+(Reading database ... 26978 files and directories currently installed.)
+Preparing to unpack .../tree_1.8.0-1_amd64.deb ...
+Unpacking tree (1.8.0-1) ...
+Setting up tree (1.8.0-1) ...
+
+~~~
+
+### Tarea 11. La máquina DMZ puede navegar. Instala un servidor web, un servidor ftp y un servidor de correos.
+
+##### Reglas
+###### Activamos DNS
+~~~
+sudo iptables -A FORWARD -i eth2 -o eth0 -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth2 -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+###### Activamos HTTP
+~~~
+sudo iptables -A FORWARD -i eth2 -o eth0 -p tcp -m multiport --dports 80 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth2 -p tcp -m multiport --sports 80 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+###### Activamos HTTPS
+~~~
+sudo iptables -A FORWARD -i eth2 -o eth0 -p tcp -m multiport --dports 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth2 -p tcp -m multiport --sports 443 -m state --state ESTABLISHED -j ACCEPT
+~~~
+
+##### Comprobación
+~~~
+debian@dmz:~$ sudo apt install apache2 postfix proftpd
+    Reading package lists... Done
+    Building dependency tree       
+    Reading state information... Done
+    Note, selecting 'proftpd-basic' instead of 'proftpd'
+    The following additional packages will be installed:
+      apache2-bin apache2-data apache2-utils libapr1 libaprutil1 libaprutil1-dbd-sqlite3    libaprutil1-ldap
+      libbrotli1 libcurl4 libgdbm-compat4 libgdbm6 libhiredis0.14 libjansson4   libldap-2.4-2 libldap-common
+      liblua5.2-0 libmemcached11 libmemcachedutil2 libnghttp2-14 libperl5.28 librtmp1   libsasl2-2
+      libsasl2-modules libsasl2-modules-db libssh2-1 perl perl-modules-5.28 proftpd-doc     ssl-cert
+    Suggested packages:
+      apache2-doc apache2-suexec-pristine | apache2-suexec-custom www-browser   libsasl2-modules-gssapi-mit
+      | libsasl2-modules-gssapi-heimdal libsasl2-modules-ldap libsasl2-modules-otp  libsasl2-modules-sql
+      perl-doc libterm-readline-gnu-perl | libterm-readline-perl-perl make libb-debug-perl
+      liblocale-codes-perl procmail postfix-mysql postfix-pgsql postfix-ldap postfix-pcre   postfix-lmdb
+      postfix-sqlite sasl2-bin | dovecot-common resolvconf postfix-cdb mail-reader ufw  postfix-doc
+      openbsd-inetd | inet-superserver proftpd-mod-ldap proftpd-mod-mysql proftpd-mod-odbc
+      proftpd-mod-pgsql proftpd-mod-sqlite proftpd-mod-geoip proftpd-mod-snmp   openssl-blacklist
+    The following NEW packages will be installed:
+      apache2 apache2-bin apache2-data apache2-utils libapr1 libaprutil1    libaprutil1-dbd-sqlite3
+      libaprutil1-ldap libbrotli1 libcurl4 libgdbm-compat4 libgdbm6 libhiredis0.14  libjansson4
+      libldap-2.4-2 libldap-common liblua5.2-0 libmemcached11 libmemcachedutil2     libnghttp2-14 libperl5.28
+      librtmp1 libsasl2-2 libsasl2-modules libsasl2-modules-db libssh2-1 perl   perl-modules-5.28 postfix
+      proftpd-basic proftpd-doc ssl-cert
+    0 upgraded, 32 newly installed, 0 to remove and 0 not upgraded.
+    Need to get 16.9 MB of archives.
+    After this operation, 72.6 MB of additional disk space will be used.
+Do you want to continue? [Y/n] y
+    Get:3 http://deb.debian.org/debian buster/main amd64 perl-modules-5.28 all 5.28.1-6     [2,873 kB]
+
+~~~
+
+### Tarea 12. Configura la máquina router-fw para que los servicios web y ftp sean accesibles desde el exterior.
 
 ##### Reglas
 ~~~
@@ -388,7 +593,7 @@ debian@router-fw:~$ ping 1.1.1.1
 
 ~~~
 
-#### 7. Desde la máquina LAN no se puede hacer ping, pero si se puede conectar por ssh a la máquina DMZ.
+### Tarea 13. El servidor web y el servidor ftp deben ser accesible desde la LAN y desde el exterior.
 
 ##### Reglas
 ~~~
@@ -400,7 +605,7 @@ debian@router-fw:~$ ping 1.1.1.1
 
 ~~~
 
-#### 8. Configura la máquina router-fw para que las máquinas LAN y DMZ puedan acceder al exterior.
+### Tarea 14. El servidor de correos sólo debe ser accesible desde la LAN.
 
 ##### Reglas
 ~~~
@@ -412,7 +617,7 @@ debian@router-fw:~$ ping 1.1.1.1
 
 ~~~
 
-#### 9. La máquina LAN se le permite hacer ping al exterior.
+### Tarea 15. En la máquina LAN instala un servidor mysql. A este servidor sólo se puede acceder desde la DMZ.
 
 ##### Reglas
 ~~~
@@ -424,113 +629,10 @@ debian@router-fw:~$ ping 1.1.1.1
 
 ~~~
 
-#### 10. La máquina LAN puede navegar.
+## Mejoras
+------------------------------------------------------------------------------------------------
 
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
-
-#### 11. La máquina DMZ puede navegar. Instala un servidor web, un servidor ftp y un servidor de correos.
-
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
-
-#### 12. Configura la máquina router-fw para que los servicios web y ftp sean accesibles desde el exterior.
-
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
-
-#### 13. El servidor web y el servidor ftp deben ser accesible desde la LAN y desde el exterior.
-
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
-
-#### 14. El servidor de correos sólo debe ser accesible desde la LAN.
-
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
-
-#### 15. En la máquina LAN instala un servidor mysql. A este servidor sólo se puede acceder desde la DMZ.
-
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
-
-#### MEJORA: Utiliza nuevas cadenas para clasificar el tráfico.
-----------------------------------------------------
-
-#### MEJORA: Consruye el cortafuego utilizando nftables.
-----------------------------------------------------
-
-
-
-
-
-
-
-
-###### Hay que activar el 'ip_forward'
-~~~
-echo 1 > /proc/sys/net/ipv4/ip_forward
-~~~
-
-###### Ahora queremos establecer varias reglar para pemitir las conexiones ssh desde las maquinas LAN y DMZ
-
-~~~
-echo 1 > /proc/sys/net/ipv4/ip_forward
-sudo iptables -t nat -I POSTROUTING -s 192.168.100.0/24 -o eth0 -p tcp --dport 22 -j MASQUERADE
-
-sudo iptables -A FORWARD -i eth1 -o eth0 -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o eth1 -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
-
-sudo iptables -t nat -I POSTROUTING -s 192.168.200.0/24 -o eth0 -p tcp --dport 22 -j MASQUERADE
-
-sudo iptables -A FORWARD -i eth2 -o eth0 -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o eth2 -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
-~~~
-
-
-###### Reinicio de la máquina
+#### MEJORA 1: Implementar que el cortafuego funcione después de un reinicio de la máquina.
 
 ~~~
 iptables-save > /etc/iproute2/rule.v4
@@ -574,3 +676,6 @@ root@router-fw:~# nano /usr/local/bin/iptables.sh
 iptables-restore < /etc/iptables/rules.v4
 ~~~
 
+#### MEJORA 2: Utiliza nuevas cadenas para clasificar el tráfico.
+
+#### MEJORA 3: Consruye el cortafuego utilizando nftables.
