@@ -84,6 +84,8 @@ exit
 ###### Configuramos la redirecion del puerto 2222 al 22
 ~~~
 sudo iptables -t nat -I PREROUTING -p tcp -s 172.22.0.0/16 --dport 2222 -j REDIRECT --to-ports 22
+
+sudo iptables -t nat -I PREROUTING -p tcp -s 172.23.0.0/16 --dport 2222 -j REDIRECT --to-ports 22
 ~~~
 
 ###### Configuramos la regla para que se pueda hacer conexión desde el puerto 2222
@@ -98,6 +100,8 @@ sudo iptables -A OUTPUT -d 172.23.0.0/16 -p tcp -m tcp --sport 2222 -m state --s
 ###### Bloquemos la conexión desde el puerto 22 redirigiendola al Loopback para que se pierda
 ~~~
 sudo iptables -t nat -I PREROUTING -p tcp -s 172.22.0.0/16 --dport 22 --jump DNAT --to-destination 127.0.0.1
+
+sudo iptables -t nat -I PREROUTING -p tcp -s 172.23.0.0/16 --dport 22 --jump DNAT --to-destination 127.0.0.1
 ~~~
 
 ##### Comprobación
@@ -260,20 +264,47 @@ debian@router-fw:~$ ping 127.0.0.1
 
 ##### Reglas
 
-###### LAN (limitamos la conexión a 3)
+###### LAN
 ~~~
-sudo iptables -A INPUT -s 192.168.100.10/24 -p icmp -m connlimit --connlimit-above 3 -j REJECT
-
+sudo iptables -A INPUT -i eth1 -s 192.168.100.0/24 -p icmp -m icmp --icmp-type echo-request -j REJECT --reject-with icmp-port-unreachable
+sudo iptables -A OUTPUT -o eth1 -d 192.168.100.0/24 -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+sudo iptables -A OUTPUT -o eth1 -d 192.168.100.0/24 -p icmp -m state --state RELATED -j ACCEPT
 ~~~
 
 ###### DMZ
 ~~~
-
+sudo iptables -A INPUT -i eth2 -s 192.168.200.0/24 -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+sudo iptables -A OUTPUT -o eth2 -d 192.168.200.0/24 -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
 ~~~
 
 ##### Comprobación
+###### LAN
+~~~
+debian@lan:~$ ping 192.168.100.2
+    PING 192.168.100.2 (192.168.100.2) 56(84) bytes of data.
+    From 192.168.100.2 icmp_seq=1 Destination Port Unreachable
+    From 192.168.100.2 icmp_seq=2 Destination Port Unreachable
+    From 192.168.100.2 icmp_seq=3 Destination Port Unreachable
+    From 192.168.100.2 icmp_seq=4 Destination Port Unreachable
+    From 192.168.100.2 icmp_seq=5 Destination Port Unreachable
+    ^C
+    --- 192.168.100.2 ping statistics ---
+    5 packets transmitted, 0 received, +5 errors, 100% packet loss, time 16ms
 ~~~
 
+###### DMZ
+~~~
+debian@dmz:~$ ping 192.168.200.2
+    PING 192.168.200.2 (192.168.200.2) 56(84) bytes of data.
+    64 bytes from 192.168.200.2: icmp_seq=1 ttl=64 time=0.896 ms
+    64 bytes from 192.168.200.2: icmp_seq=2 ttl=64 time=1.12 ms
+    64 bytes from 192.168.200.2: icmp_seq=3 ttl=64 time=1.08 ms
+    64 bytes from 192.168.200.2: icmp_seq=4 ttl=64 time=1.15 ms
+    64 bytes from 192.168.200.2: icmp_seq=5 ttl=64 time=1.11 ms
+    ^C
+    --- 192.168.200.2 ping statistics ---
+    5 packets transmitted, 5 received, 0% packet loss, time 10ms
+    rtt min/avg/max/mdev = 0.896/1.070/1.145/0.098 ms
 ~~~
 
 #### 5. La máquina router-fw puede hacer ping a la LAN, la DMZ y al exterior.
@@ -282,20 +313,20 @@ sudo iptables -A INPUT -s 192.168.100.10/24 -p icmp -m connlimit --connlimit-abo
 
 ###### LAN
 ~~~
-sudo iptables -A INPUT -s 192.168.100.10/16 -p icmp -j ACCEPT
-sudo iptables -A OUTPUT -d 192.168.100.10/16 -p icmp -j ACCEPT
+sudo iptables -A OUTPUT -o eth1 -d 192.168.100.0/24 -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+sudo iptables -A INPUT -i eth1 -s 192.168.100.0/24 -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
 ~~~
 
 ###### DMZ
 ~~~
-sudo iptables -A INPUT -s 192.168.200.10/16 -p icmp -j ACCEPT
-sudo iptables -A OUTPUT -d 192.168.200.10/16 -p icmp -j ACCEPT
+sudo iptables -A OUTPUT -o eth2 -d 192.168.200.0/24 -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+sudo iptables -A INPUT -i eth2 -s 192.168.200.0/24 -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
 ~~~
 
 ###### Exterior
 ~~~
-sudo iptables -A INPUT -i eth0 -p icmp -j ACCEPT
-sudo iptables -A OUTPUT -o eth0 -p icmp -j ACCEPT
+sudo iptables -A OUTPUT -o eth0 -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+sudo iptables -A INPUT -i eth0 -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
 ~~~
 
 ##### Comprobación
@@ -304,36 +335,45 @@ sudo iptables -A OUTPUT -o eth0 -p icmp -j ACCEPT
 ~~~
 debian@router-fw:~$ ping 192.168.100.10
     PING 192.168.100.10 (192.168.100.10) 56(84) bytes of data.
-    64 bytes from 192.168.100.10: icmp_seq=1 ttl=64 time=0.920 ms
-    64 bytes from 192.168.100.10: icmp_seq=2 ttl=64 time=0.738 ms
+    64 bytes from 192.168.100.10: icmp_seq=1 ttl=64 time=1.02 ms
+    64 bytes from 192.168.100.10: icmp_seq=2 ttl=64 time=0.857 ms
+    64 bytes from 192.168.100.10: icmp_seq=3 ttl=64 time=0.802 ms
+    64 bytes from 192.168.100.10: icmp_seq=4 ttl=64 time=0.696 ms
+    64 bytes from 192.168.100.10: icmp_seq=5 ttl=64 time=0.791 ms
     ^C
     --- 192.168.100.10 ping statistics ---
-    2 packets transmitted, 2 received, 0% packet loss, time 2ms
-    rtt min/avg/max/mdev = 0.738/0.829/0.920/0.091 ms
+    5 packets transmitted, 5 received, 0% packet loss, time 10ms
+    rtt min/avg/max/mdev = 0.696/0.832/1.015/0.106 ms
 ~~~
 
 ###### DMZ
 ~~~
 debian@router-fw:~$ ping 192.168.200.10
     PING 192.168.200.10 (192.168.200.10) 56(84) bytes of data.
-    64 bytes from 192.168.200.10: icmp_seq=1 ttl=64 time=1.45 ms
-    64 bytes from 192.168.200.10: icmp_seq=2 ttl=64 time=1.09 ms
+    64 bytes from 192.168.200.10: icmp_seq=1 ttl=64 time=1.80 ms
+    64 bytes from 192.168.200.10: icmp_seq=2 ttl=64 time=0.997 ms
+    64 bytes from 192.168.200.10: icmp_seq=3 ttl=64 time=0.790 ms
+    64 bytes from 192.168.200.10: icmp_seq=4 ttl=64 time=1.05 ms
+    64 bytes from 192.168.200.10: icmp_seq=5 ttl=64 time=1.14 ms
     ^C
     --- 192.168.200.10 ping statistics ---
-    2 packets transmitted, 2 received, 0% packet loss, time 3ms
-    rtt min/avg/max/mdev = 1.088/1.268/1.449/0.183 ms
+    5 packets transmitted, 5 received, 0% packet loss, time 10ms
+    rtt min/avg/max/mdev = 0.790/1.154/1.801/0.344 ms
 ~~~
 
 ###### Exterior
 ~~~
 debian@router-fw:~$ ping 1.1.1.1
     PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.
-    64 bytes from 1.1.1.1: icmp_seq=1 ttl=54 time=43.9 ms
-    64 bytes from 1.1.1.1: icmp_seq=2 ttl=54 time=42.7 ms
+    64 bytes from 1.1.1.1: icmp_seq=1 ttl=55 time=41.4 ms
+    64 bytes from 1.1.1.1: icmp_seq=2 ttl=55 time=41.0 ms
+    64 bytes from 1.1.1.1: icmp_seq=3 ttl=55 time=41.9 ms
+    64 bytes from 1.1.1.1: icmp_seq=4 ttl=55 time=42.1 ms
+    64 bytes from 1.1.1.1: icmp_seq=5 ttl=55 time=42.10 ms
     ^C
     --- 1.1.1.1 ping statistics ---
-    2 packets transmitted, 2 received, 0% packet loss, time 3ms
-    rtt min/avg/max/mdev = 42.713/43.325/43.938/0.646 ms
+    5 packets transmitted, 5 received, 0% packet loss, time 11ms
+    rtt min/avg/max/mdev = 41.032/41.874/42.950/0.673 ms
 ~~~
 
 #### 6. Desde la máquina DMZ se puede hacer ping y conexión ssh a la máquina LAN.
@@ -456,13 +496,14 @@ debian@router-fw:~$ ping 1.1.1.1
 
 ~~~
 
-#### Si crees que necesitas más reglas de las que nos han indicado, describe porque pueden ser necesarias.
-----------------------------------------------------
-
 #### MEJORA: Utiliza nuevas cadenas para clasificar el tráfico.
 ----------------------------------------------------
 
 #### MEJORA: Consruye el cortafuego utilizando nftables.
+----------------------------------------------------
+
+
+
 
 
 
@@ -472,8 +513,6 @@ debian@router-fw:~$ ping 1.1.1.1
 ~~~
 echo 1 > /proc/sys/net/ipv4/ip_forward
 ~~~
-
-
 
 ###### Ahora queremos establecer varias reglar para pemitir las conexiones ssh desde las maquinas LAN y DMZ
 
