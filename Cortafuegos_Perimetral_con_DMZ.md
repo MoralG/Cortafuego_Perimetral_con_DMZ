@@ -1074,3 +1074,109 @@ iptables -A LAN_A_DMZ -p tcp --sport 3306 -m state --state ESTABLISHED -j ACCEPT
 ~~~
 
 #### MEJORA 3: Consruye el cortafuego utilizando nftables.
+
+###### Sustituyendo en cada regla ```iptables``` por ```iptables-translate``` nos saldrá por pantalla la regla traduccida a nftables, pero con algunos errores.
+
+~~~
+debian@router-fw:~$ sudo iptables-translate -A FORWARD -i eth1 -o eth0 -p tcp -m multiport --dports 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+    nft add rule ip filter FORWARD iifname "eth1" oifname "eth0" ip protocol tcp tcp dport 443 ct state new,established  counter accept
+~~~
+
+###### Como vemos en la regla de nftables que nos devuelve, encontramos los siguientes fallos:
+
+* ###### ip: En nftables sería inet
+* ###### FORWARD: En nftables tendría que ser forward en minúsculas
+
+###### Para solucionar estos fallos creamos el siguiente [SCRIPT]():
+
+``` sh
+#!/bin/sh
+
+sudo rm /home/debian/fichero1 2> /dev/null
+sudo rm /home/debian/fichero2 2> /dev/null
+sudo rm /home/debian/fichero3 2> /dev/null
+
+sudo iptables -S > /home/debian/fichero1
+sudo iptables -t nat -S >> /home/debian/fichero1
+
+while read linea 
+do
+    sudo iptables-translate $linea >> /home/debian/fichero2
+done < fichero1
+
+sed 's/ ip /inet/g' /home/debian/fichero2 > /home/debian/fichero3
+tr A-Z a-z < /home/debian/fichero3 > /home/debian/nftables.txt 
+
+sudo rm /home/debian/fichero1 2> /dev/null
+sudo rm /home/debian/fichero2 2> /dev/null
+sudo rm /home/debian/fichero3 2> /dev/null
+```
+
+###### Ejecutamos el script:
+~~~
+bash Translate-iptables.sh 
+~~~
+
+###### Nos crea un fichero con la reglas de nftables corregidas.
+~~~
+cat nftables.txt 
+    nft add rule inet filter input inet saddr 172.22.0.0/16 tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter input inet saddr 172.23.0.0/16 tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter input iifname "eth1" inet saddr 192.168.100.0/24 tcp sport 22 ct state established  counter accept
+    nft add rule inet filter input iifname "eth2" inet saddr 192.168.200.0/24 tcp sport 22 ct state established  counter accept
+    nft add rule inet filter input inet saddr 172.22.0.0/16 tcp dport 2222 ct state new,established  counter accept
+    nft add rule inet filter input inet saddr 172.23.0.0/16 tcp dport 2222 ct state new,established  counter accept
+    nft add rule inet filter input inet saddr 192.168.100.0/24 tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter input inet saddr 192.168.0.0/16 tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter input iifname "lo" inet protocol icmp counter accept
+    nft add rule inet filter input iifname "eth1" inet saddr 192.168.100.0/24 icmp type echo-request counter reject
+    nft add rule inet filter input iifname "eth2" inet saddr 192.168.200.0/24 icmp type echo-request counter accept
+    nft add rule inet filter input iifname "eth1" inet saddr 192.168.100.0/24 icmp type echo-reply counter accept
+    nft add rule inet filter input iifname "eth2" inet saddr 192.168.200.0/24 icmp type echo-reply counter accept
+    nft add rule inet filter input iifname "eth0" icmp type echo-reply counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth1" tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth2" tcp sport 22 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth1" inet saddr 192.168.200.0/24 icmp type echo-request counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth2" inet daddr 192.168.200.0/24 icmp type echo-reply counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth2" tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth1" tcp sport 22 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth0" icmp type echo-request counter accept
+    nft add rule inet filter forward iifname "eth0" oifname "eth1" icmp type echo-reply counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth0" udp dport 53 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth0" oifname "eth1" udp sport 53 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth0" inet protocol tcp tcp dport 80 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth0" oifname "eth1" inet protocol tcp tcp sport 80 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth0" inet protocol tcp tcp dport 443 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth0" oifname "eth1" inet protocol tcp tcp sport 443 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth0" udp dport 53 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth0" oifname "eth2" udp sport 53 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth0" tcp dport 80 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth0" oifname "eth2" tcp sport 80 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth0" tcp dport 443 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth0" oifname "eth2" tcp sport 443 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth2" tcp dport 25 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth1" tcp sport 25 ct state established  counter accept
+    nft add rule inet filter forward iifname "eth2" oifname "eth1" tcp dport 3306 ct state new,established  counter accept
+    nft add rule inet filter forward iifname "eth1" oifname "eth2" tcp sport 3306 ct state established  counter accept
+    nft add rule inet filter output inet daddr 172.22.0.0/16 tcp sport 22 ct state established  counter accept
+    nft add rule inet filter output inet daddr 172.23.0.0/16 tcp sport 22 ct state established  counter accept
+    nft add rule inet filter output oifname "eth1" inet daddr 192.168.100.0/24 tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter output oifname "eth2" inet daddr 192.168.200.0/24 tcp dport 22 ct state new,established  counter accept
+    nft add rule inet filter output inet daddr 172.22.0.0/16 tcp sport 2222 ct state established  counter accept
+    nft add rule inet filter output inet daddr 172.23.0.0/16 tcp sport 2222 ct state established  counter accept
+    nft add rule inet filter output inet daddr 192.168.100.0/24 tcp sport 22 ct state established  counter accept
+    nft add rule inet filter output inet daddr 192.168.0.0/16 tcp sport 22 ct state established  counter accept
+    nft add rule inet filter output oifname "lo" inet protocol icmp counter accept
+    nft add rule inet filter output oifname "eth1" inet daddr 192.168.100.0/24 icmp type echo-reply counter accept
+    nft add rule inet filter output oifname "eth1" inet protocol icmp inet daddr 192.168.100.0/24 ct state related  counter accept
+    nft add rule inet filter output oifname "eth2" inet daddr 192.168.200.0/24 icmp type echo-reply counter accept
+    nft add rule inet filter output oifname "eth1" inet daddr 192.168.100.0/24 icmp type echo-request counter accept
+    nft add rule inet filter output oifname "eth2" inet daddr 192.168.200.0/24 icmp type echo-request counter accept
+    nft add rule inet filter output oifname "eth0" icmp type echo-request counter accept
+    nft add rule inet filter prerouting inet saddr 172.23.0.0/16 tcp dport 22 counter dnat to 127.0.0.1
+    nft add rule inet filter prerouting inet saddr 172.22.0.0/16 tcp dport 22 counter dnat to 127.0.0.1
+    nft add rule inet filter prerouting inet saddr 172.23.0.0/16 tcp dport 2222 counter redirect to :22
+    nft add rule inet filter prerouting inet saddr 172.22.0.0/16 tcp dport 2222 counter redirect to :22
+    nft add rule inet filter postrouting oifname "eth0" inet saddr 192.168.100.0/24 counter masquerade 
+    nft add rule inet filter postrouting oifname "eth0" inet saddr 192.168.200.0/24 counter masquerade 
+~~~
