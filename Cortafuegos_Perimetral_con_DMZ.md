@@ -1087,7 +1087,7 @@ debian@router-fw:~$ sudo iptables-translate -A FORWARD -i eth1 -o eth0 -p tcp -m
 * ###### ip: En nftables sería inet
 * ###### FORWARD: En nftables tendría que ser forward en minúsculas
 
-###### Para solucionar estos fallos creamos el siguiente [SCRIPT]():
+###### Para solucionar estos fallos creamos el siguiente [SCRIPT](https://github.com/MoralG/Cortafuego_Perimetral_con_DMZ/blob/master/Translate-iptables.sh):
 
 ``` sh
 #!/bin/sh
