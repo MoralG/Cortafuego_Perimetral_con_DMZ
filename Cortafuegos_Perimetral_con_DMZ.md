@@ -509,7 +509,7 @@ sudo iptables -A FORWARD -i eth0 -o eth1 -p tcp -m multiport --sports 443 -m sta
 ~~~
 debian@lan:~$ sudo apt install tree
 Reading package lists... Done
-Building dependency tree       
+Building dependency tree
 Reading state information... Done
 The following NEW packages will be installed:
   tree
@@ -523,7 +523,6 @@ Selecting previously unselected package tree.
 Preparing to unpack .../tree_1.8.0-1_amd64.deb ...
 Unpacking tree (1.8.0-1) ...
 Setting up tree (1.8.0-1) ...
-
 ~~~
 
 ### Tarea 11. La máquina DMZ puede navegar. Instala un servidor web, un servidor ftp y un servidor de correos.
@@ -537,21 +536,21 @@ sudo iptables -A FORWARD -i eth0 -o eth2 -p udp --sport 53 -m state --state ESTA
 
 ###### Activamos HTTP
 ~~~
-sudo iptables -A FORWARD -i eth2 -o eth0 -p tcp -m multiport --dports 80 -m state --state NEW,ESTABLISHED -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o eth2 -p tcp -m multiport --sports 80 -m state --state ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth2 -o eth0 -p tcp --dport 80 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth2 -p tcp --sport 80 -m state --state ESTABLISHED -j ACCEPT
 ~~~
 
 ###### Activamos HTTPS
 ~~~
-sudo iptables -A FORWARD -i eth2 -o eth0 -p tcp -m multiport --dports 443 -m state --state NEW,ESTABLISHED -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o eth2 -p tcp -m multiport --sports 443 -m state --state ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth2 -o eth0 -p tcp --dport 443 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth2 -p tcp --sport 443 -m state --state ESTABLISHED -j ACCEPT
 ~~~
 
 ##### Comprobación
 ~~~
 debian@dmz:~$ sudo apt install apache2 postfix proftpd
     Reading package lists... Done
-    Building dependency tree       
+    Building dependency tree
     Reading state information... Done
     Note, selecting 'proftpd-basic' instead of 'proftpd'
     The following additional packages will be installed:
@@ -578,7 +577,6 @@ debian@dmz:~$ sudo apt install apache2 postfix proftpd
     After this operation, 72.6 MB of additional disk space will be used.
 Do you want to continue? [Y/n] y
     Get:3 http://deb.debian.org/debian buster/main amd64 perl-modules-5.28 all 5.28.1-6     [2,873 kB]
-
 ~~~
 
 ### Tarea 12. Configura la máquina router-fw para que los servicios web y ftp sean accesibles desde el exterior.
@@ -607,26 +605,124 @@ Do you want to continue? [Y/n] y
 
 ### Tarea 14. El servidor de correos sólo debe ser accesible desde la LAN.
 
-##### Reglas
+###### En la instalación elegimos *internet site*.
+
+~~~
+   ┌───────────────────────────────────┤ Postfix Configuration ├────────────────────────────────────┐
+   │ Escoja el tipo de configuración del servidor de correo que se ajusta mejor a sus necesidades.  │
+   │                                                                                                │
+   │  Sin configuración:                                                                            │
+   │   Mantiene la configuración actual intacta.                                                    │
+   │  Sitio de Internet:                                                                            │
+   │   El correo se envía y recibe directamente utilizando SMTP.                                    │
+   │  Internet con «smarthost»:                                                                     │
+   │   El correo se recibe directamente utilizando SMTP o ejecutando una                            │
+   │   herramienta como «fetchmail». El correo de salida se envía utilizando                        │
+   │   un «smarthost».                                                                              │
+   │  Sólo correo local:                                                                            │
+   │   El único correo que se entrega es para los usuarios locales. No                              │
+   │   hay red.                                                                                     │
+   │                                                                                                │
+   │ Tipo genérico de configuración de correo:                                                      │
+   │                                                                                                │
+   │                                   Sin configuración                                            │
+   │                            >>>>   Sitio de Internet                                            │
+   │                                   Internet con «smarthost»                                     │
+   │                                   Sistema satélite                                             │
+   │                                   Sólo correo local                                            │
+   │                                                                                                │
+   │                                                                                                │
+   │                           <Aceptar>                          <Cancelar>                        │
+   │                                                                                                │
+   └────────────────────────────────────────────────────────────────────────────────────────────────┘
 ~~~
 
+###### Ahora vamos a especificar las redes permitidas por el servidor de correos en el fichero ```/etc/postfix/main.cf```, modificando las siguiente linea:
+
+~~~
+mynetworks = 127.0.0.0/8 192.168.100.0/24
+~~~
+
+##### Reglas
+~~~
+sudo iptables -A FORWARD -i eth1 -o eth2 -p tcp --dport 25 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth2 -o eth1 -p tcp --sport 25 -m state --state ESTABLISHED -j ACCEPT
 ~~~
 
 ##### Comprobación
 ~~~
-
+debian@lan:~$ telnet 192.168.200.10 25
+    Trying 192.168.200.10...
+    Connected to 192.168.200.10.
+    Escape character is '^]'.
+    220 dmz.novalocal ESMTP Postfix (Debian/GNU)
 ~~~
 
 ### Tarea 15. En la máquina LAN instala un servidor mysql. A este servidor sólo se puede acceder desde la DMZ.
 
-##### Reglas
+###### Instalamos en la lan el servidor y en la dmz el cliente de mariadb.
+
+
+###### En la la LAN
+~~~
+sudo apt install mariadb-server
 ~~~
 
+###### En la DMZ
+
+~~~
+sudo apt install mariadb-client
+~~~
+
+###### Creamos en el servidor la una base de datos y un usuario, además le asignamos los permisos para que podamos acceder desde la DMZ
+
+~~~
+MariaDB [(none)]> CREATE DATABASE prueba;
+    Query OK, 1 row affected (0.001 sec)
+
+MariaDB [(none)]> CREATE USER user_prueba@"192.168.200.10" IDENTIFIED BY "user_prueba";
+    Query OK, 0 rows affected (0.045 sec)
+
+MariaDB [(none)]> GRANT ALL PRIVILEGES ON prueba.* to user_prueba IDENTIFIED BY "user_prueba";
+    Query OK, 0 rows affected (0.001 sec)
+
+MariaDB [(none)]> FLUSH PRIVILEGES;
+    Query OK, 0 rows affected (0.001 sec)
+~~~
+
+###### Editamos el fichero ```/etc/mysql/mariadb.conf.d/50-server.cnf``` y añadimos la siguiente linea:
+
+~~~
+bind-address            = 0.0.0.0
+~~~
+
+###### Reiniciamos el sericio:
+
+~~~
+sudo systemctl restart mariadb.service 
+~~~
+
+##### Reglas
+~~~
+sudo iptables -A FORWARD -i eth2 -o eth1 -p tcp --dport 3306 -m state --state NEW,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth1 -o eth2 -p tcp --sport 3306 -m state --state ESTABLISHED -j ACCEPT
 ~~~
 
 ##### Comprobación
 ~~~
+debian@dmz:~$ sudo mysql -u user_prueba -p prueba -h 192.168.100.10
+Enter password: 
+    Welcome to the MariaDB monitor.  Commands end with ; or \g.
+    Your MariaDB connection id is 36
+    Server version: 10.3.18-MariaDB-0+deb10u1 Debian 10
 
+    Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+    Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [prueba]> use prueba
+    Database changed
+MariaDB [prueba]>
 ~~~
 
 ## Mejoras
@@ -634,48 +730,347 @@ Do you want to continue? [Y/n] y
 
 #### MEJORA 1: Implementar que el cortafuego funcione después de un reinicio de la máquina.
 
+###### Con ```root@router-fw:``` creamos el fichero *iptableSave.v4* donde guardaremos todas la reglas de iptables que esten activas en el momento de ejecitar dicho comando.
 ~~~
-iptables-save > /etc/iproute2/rule.v4
-~~~
-
-~~~
-# Generated by xtables-save v1.8.2 on Tue Dec 10 11:25:30 2019
-*filter
-:INPUT DROP [12:1876]
-:FORWARD DROP [0:0]
-:OUTPUT DROP [317:23506]
--A INPUT -s 172.22.0.0/16 -p tcp -m tcp --dport 22 -j ACCEPT
--A INPUT -s 172.23.0.0/16 -p tcp -m tcp --dport 22 -j ACCEPT
--A INPUT -s 192.168.100.0/24 -i eth1 -p tcp -m tcp --sport 22 -j ACCEPT
--A INPUT -s 192.168.200.0/24 -i eth2 -p tcp -m tcp --sport 22 -j ACCEPT
--A FORWARD -i eth1 -o eth0 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
--A FORWARD -i eth0 -o eth1 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
--A OUTPUT -d 172.22.0.0/16 -p tcp -m tcp --sport 22 -j ACCEPT
--A OUTPUT -d 172.23.0.0/16 -p tcp -m tcp --sport 22 -j ACCEPT
--A OUTPUT -d 192.168.100.0/24 -o eth1 -p tcp -m tcp --dport 22 -j ACCEPT
--A OUTPUT -d 192.168.200.0/24 -o eth2 -p tcp -m tcp --dport 22 -j ACCEPT
-COMMIT
-# Completed on Tue Dec 10 11:25:30 2019
-# Generated by xtables-save v1.8.2 on Tue Dec 10 11:25:30 2019
-*nat
-:PREROUTING ACCEPT [498:37760]
-:INPUT ACCEPT [3:180]
-:POSTROUTING ACCEPT [5:576]
-:OUTPUT ACCEPT [311:22930]
--A POSTROUTING -s 192.168.100.0/24 -o eth0 -p tcp -m tcp --dport 22 -j MASQUERADE
-COMMIT
-# Completed on Tue Dec 10 11:25:30 2019
+iptables-save > /etc/iproute2/iptableSave.v4
 ~~~
 
 ~~~
-root@router-fw:~# nano /usr/local/bin/iptables.sh
+root@router-fw:~# cat /etc/iproute2/iptableSave.v4 
+    # Generated by xtables-save v1.8.2 on Fri Jan  3 18:03:13 2020
+    *filter
+    :INPUT DROP [29:4732]
+    :FORWARD DROP [0:0]
+    :OUTPUT DROP [636:48678]
+    -A INPUT -s 172.22.0.0/16 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED     -j ACCEPT
+    -A INPUT -s 172.23.0.0/16 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED     -j ACCEPT
+    -A INPUT -s 192.168.100.0/24 -i eth1 -p tcp -m tcp --sport 22 -m state --state  ESTABLISHED -j ACCEPT
+    -A INPUT -s 192.168.200.0/24 -i eth2 -p tcp -m tcp --sport 22 -m state --state  ESTABLISHED -j ACCEPT
+    -A INPUT -s 172.22.0.0/16 -p tcp -m tcp --dport 2222 -m state --state NEW,ESTABLISHED   -j ACCEPT
+    -A INPUT -s 172.23.0.0/16 -p tcp -m tcp --dport 2222 -m state --state NEW,ESTABLISHED   -j ACCEPT
+    -A INPUT -s 192.168.100.0/24 -p tcp -m tcp --dport 22 -m state --state NEW, ESTABLISHED -j ACCEPT
+    -A INPUT -s 192.168.0.0/16 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED    -j ACCEPT
+    -A INPUT -i lo -p icmp -j ACCEPT
+    -A INPUT -s 192.168.100.0/24 -i eth1 -p icmp -m icmp --icmp-type 8 -j REJECT    --reject-with icmp-port-unreachable
+    -A INPUT -s 192.168.200.0/24 -i eth2 -p icmp -m icmp --icmp-type 8 -j ACCEPT
+    -A INPUT -s 192.168.100.0/24 -i eth1 -p icmp -m icmp --icmp-type 0 -j ACCEPT
+    -A INPUT -s 192.168.200.0/24 -i eth2 -p icmp -m icmp --icmp-type 0 -j ACCEPT
+    -A INPUT -i eth0 -p icmp -m icmp --icmp-type 0 -j ACCEPT
+    -A FORWARD -i eth2 -o eth1 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED    -j ACCEPT
+    -A FORWARD -i eth1 -o eth2 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j     ACCEPT
+    -A FORWARD -s 192.168.200.0/24 -i eth2 -o eth1 -p icmp -m icmp --icmp-type 8 -j ACCEPT
+    -A FORWARD -d 192.168.200.0/24 -i eth1 -o eth2 -p icmp -m icmp --icmp-type 0 -j ACCEPT
+    -A FORWARD -i eth1 -o eth2 -p tcp -m tcp --dport 22 -m state --state NEW,ESTABLISHED    -j ACCEPT
+    -A FORWARD -i eth2 -o eth1 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j     ACCEPT
+    -A FORWARD -i eth1 -o eth0 -p icmp -m icmp --icmp-type 8 -j ACCEPT
+    -A FORWARD -i eth0 -o eth1 -p icmp -m icmp --icmp-type 0 -j ACCEPT
+    -A FORWARD -i eth1 -o eth0 -p udp -m udp --dport 53 -m state --state NEW,ESTABLISHED    -j ACCEPT
+    -A FORWARD -i eth0 -o eth1 -p udp -m udp --sport 53 -m state --state ESTABLISHED -j     ACCEPT
+    -A FORWARD -i eth1 -o eth0 -p tcp -m multiport --dports 80 -m state --state NEW,    ESTABLISHED -j ACCEPT
+    -A FORWARD -i eth0 -o eth1 -p tcp -m multiport --sports 80 -m state --state     ESTABLISHED -j ACCEPT
+    -A FORWARD -i eth1 -o eth0 -p tcp -m multiport --dports 443 -m state --state NEW,   ESTABLISHED -j ACCEPT
+    -A FORWARD -i eth0 -o eth1 -p tcp -m multiport --sports 443 -m state --state    ESTABLISHED -j ACCEPT
+    -A FORWARD -i eth2 -o eth0 -p udp -m udp --dport 53 -m state --state NEW,ESTABLISHED    -j ACCEPT
+    -A FORWARD -i eth0 -o eth2 -p udp -m udp --sport 53 -m state --state ESTABLISHED -j     ACCEPT
+    -A FORWARD -i eth2 -o eth0 -p tcp -m tcp --dport 80 -m state --state NEW,ESTABLISHED    -j ACCEPT
+    -A FORWARD -i eth0 -o eth2 -p tcp -m tcp --sport 80 -m state --state ESTABLISHED -j     ACCEPT
+    -A FORWARD -i eth2 -o eth0 -p tcp -m tcp --dport 443 -m state --state NEW,ESTABLISHED   -j ACCEPT
+    -A FORWARD -i eth0 -o eth2 -p tcp -m tcp --sport 443 -m state --state ESTABLISHED -j    ACCEPT
+    -A FORWARD -i eth1 -o eth2 -p tcp -m tcp --dport 25 -m state --state NEW,ESTABLISHED    -j ACCEPT
+    -A FORWARD -i eth2 -o eth1 -p tcp -m tcp --sport 25 -m state --state ESTABLISHED -j     ACCEPT
+    -A FORWARD -i eth2 -o eth1 -p tcp -m tcp --dport 3306 -m state --state NEW, ESTABLISHED -j ACCEPT
+    -A FORWARD -i eth1 -o eth2 -p tcp -m tcp --sport 3306 -m state --state ESTABLISHED -j   ACCEPT
+    -A OUTPUT -d 172.22.0.0/16 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j     ACCEPT
+    -A OUTPUT -d 172.23.0.0/16 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j     ACCEPT
+    -A OUTPUT -d 192.168.100.0/24 -o eth1 -p tcp -m tcp --dport 22 -m state --state NEW,    ESTABLISHED -j ACCEPT
+    -A OUTPUT -d 192.168.200.0/24 -o eth2 -p tcp -m tcp --dport 22 -m state --state NEW,    ESTABLISHED -j ACCEPT
+    -A OUTPUT -d 172.22.0.0/16 -p tcp -m tcp --sport 2222 -m state --state ESTABLISHED -j   ACCEPT
+    -A OUTPUT -d 172.23.0.0/16 -p tcp -m tcp --sport 2222 -m state --state ESTABLISHED -j   ACCEPT
+    -A OUTPUT -d 192.168.100.0/24 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED     -j ACCEPT
+    -A OUTPUT -d 192.168.0.0/16 -p tcp -m tcp --sport 22 -m state --state ESTABLISHED -j    ACCEPT
+    -A OUTPUT -o lo -p icmp -j ACCEPT
+    -A OUTPUT -d 192.168.100.0/24 -o eth1 -p icmp -m icmp --icmp-type 0 -j ACCEPT
+    -A OUTPUT -d 192.168.100.0/24 -o eth1 -p icmp -m state --state RELATED -j ACCEPT
+    -A OUTPUT -d 192.168.200.0/24 -o eth2 -p icmp -m icmp --icmp-type 0 -j ACCEPT
+    -A OUTPUT -d 192.168.100.0/24 -o eth1 -p icmp -m icmp --icmp-type 8 -j ACCEPT
+    -A OUTPUT -d 192.168.200.0/24 -o eth2 -p icmp -m icmp --icmp-type 8 -j ACCEPT
+    -A OUTPUT -o eth0 -p icmp -m icmp --icmp-type 8 -j ACCEPT
+    COMMIT
+    # Completed on Fri Jan  3 18:03:13 2020
+    # Generated by xtables-save v1.8.2 on Fri Jan  3 18:03:13 2020
+    *nat
+    :PREROUTING ACCEPT [13:875]
+    :INPUT ACCEPT [3:180]
+    :POSTROUTING ACCEPT [6:580]
+    :OUTPUT ACCEPT [625:47026]
+    -A PREROUTING -s 172.23.0.0/16 -p tcp -m tcp --dport 22 -j DNAT --to-destination    127.0.0.1
+    -A PREROUTING -s 172.22.0.0/16 -p tcp -m tcp --dport 22 -j DNAT --to-destination    127.0.0.1
+    -A PREROUTING -s 172.23.0.0/16 -p tcp -m tcp --dport 2222 -j REDIRECT --to-ports 22
+    -A PREROUTING -s 172.22.0.0/16 -p tcp -m tcp --dport 2222 -j REDIRECT --to-ports 22
+    -A POSTROUTING -s 192.168.100.0/24 -o eth0 -j MASQUERADE
+    -A POSTROUTING -s 192.168.200.0/24 -o eth0 -j MASQUERADE
+    COMMIT
+    # Completed on Fri Jan  3 18:03:13 2020
 ~~~
 
+###### Creamos la unidad de systemd, para esto, tenemos que crear el fichero ```/etc/systemd/system/restart-iptables.service``` y añadir las siguientes lineas:
+
 ~~~
-#! /usr/bin/env bash
-iptables-restore < /etc/iptables/rules.v4
+[Unit]
+Description=restaurar las iptables
+After=networking.service
+
+[Service]
+ExecStart=/usr/local/bin/restart-iptables.sh
+
+[Install]
+WantedBy=multi-user.target
+~~~
+
+###### Creamos el script en la ruta indicada en el fichero de systemd ```/usr/local/bin/restart-iptables.sh```
+
+~~~
+#!/bin/bash
+iptables-restore < /etc/iproute2/iptableSave.v4
+echo "Reglas de iptables restauradas"
+~~~
+
+###### Cambiamos los permisos del script:
+
+~~~
+chmod 744 /usr/local/bin/restart-iptables.sh
+~~~
+
+###### Activamos el servicio para que siempre se active al inicio del sistema:
+
+~~~
+systemctl enable restart-iptables.service
+    Created symlink /etc/systemd/system/multi-user.target.wants/restart-iptables.service → /etc/systemd/system/restart-iptables.service.
+~~~
+
+###### Iniciamos el servicio:
+
+~~~
+systemctl start restart-iptables.service
+~~~
+
+##### Comprobación:
+
+~~~
+root@router-fw:~# reboot
+root@router-fw:~# Connection to 172.22.200.145 closed by remote host.
+    Connection to 172.22.200.145 closed.
+
+moralg@padano:~$ ssh -A -p 2222 debian@172.22.200.145
+    Linux router-fw 4.19.0-6-cloud-amd64 #1 SMP Debian 4.19.67-2+deb10u1 (2019-09-20)   x86_64
+
+    The programs included with the Debian GNU/Linux system are free software;
+    the exact distribution terms for each program are described in the
+    individual files in /usr/share/doc/*/copyright.
+
+    Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by applicable law.
+    Last login: Fri Jan  3 17:03:31 2020 from 172.23.0.54
+
+debian@router-fw:~$ sudo iptables -n -L
+    Chain INPUT (policy DROP)
+    target     prot opt source               destination         
+    ACCEPT     tcp  --  172.22.0.0/16        0.0.0.0/0            tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  172.23.0.0/16        0.0.0.0/0            tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  192.168.100.0/24     0.0.0.0/0            tcp spt:22 state  ESTABLISHED
+    ACCEPT     tcp  --  192.168.200.0/24     0.0.0.0/0            tcp spt:22 state  ESTABLISHED
+    ACCEPT     tcp  --  172.22.0.0/16        0.0.0.0/0            tcp dpt:2222 state NEW,   ESTABLISHED
+    ACCEPT     tcp  --  172.23.0.0/16        0.0.0.0/0            tcp dpt:2222 state NEW,   ESTABLISHED
+    ACCEPT     tcp  --  192.168.100.0/24     0.0.0.0/0            tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  192.168.0.0/16       0.0.0.0/0            tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0           
+    REJECT     icmp --  192.168.100.0/24     0.0.0.0/0            icmptype 8 reject-with    icmp-port-unreachable
+    ACCEPT     icmp --  192.168.200.0/24     0.0.0.0/0            icmptype 8
+    ACCEPT     icmp --  192.168.100.0/24     0.0.0.0/0            icmptype 0
+    ACCEPT     icmp --  192.168.200.0/24     0.0.0.0/0            icmptype 0
+    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            icmptype 0
+
+    Chain FORWARD (policy DROP)
+    target     prot opt source               destination         
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:22 state  ESTABLISHED
+    ACCEPT     icmp --  192.168.200.0/24     0.0.0.0/0            icmptype 8
+    ACCEPT     icmp --  0.0.0.0/0            192.168.200.0/24     icmptype 0
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:22 state  ESTABLISHED
+    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            icmptype 8
+    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            icmptype 0
+    ACCEPT     udp  --  0.0.0.0/0            0.0.0.0/0            udp dpt:53 state NEW, ESTABLISHED
+    ACCEPT     udp  --  0.0.0.0/0            0.0.0.0/0            udp spt:53 state  ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            multiport dports 80   state NEW,ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            multiport sports 80   state ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            multiport dports 443  state NEW,ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            multiport sports 443  state ESTABLISHED
+    ACCEPT     udp  --  0.0.0.0/0            0.0.0.0/0            udp dpt:53 state NEW, ESTABLISHED
+    ACCEPT     udp  --  0.0.0.0/0            0.0.0.0/0            udp spt:53 state  ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:80 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:80 state  ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:443 state NEW,    ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:443 state     ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:25 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:25 state  ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp dpt:3306 state NEW,   ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            0.0.0.0/0            tcp spt:3306 state    ESTABLISHED
+
+    Chain OUTPUT (policy DROP)
+    target     prot opt source               destination         
+    ACCEPT     tcp  --  0.0.0.0/0            172.22.0.0/16        tcp spt:22 state  ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            172.23.0.0/16        tcp spt:22 state  ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            192.168.100.0/24     tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            192.168.200.0/24     tcp dpt:22 state NEW, ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            172.22.0.0/16        tcp spt:2222 state    ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            172.23.0.0/16        tcp spt:2222 state    ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            192.168.100.0/24     tcp spt:22 state  ESTABLISHED
+    ACCEPT     tcp  --  0.0.0.0/0            192.168.0.0/16       tcp spt:22 state  ESTABLISHED
+    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0           
+    ACCEPT     icmp --  0.0.0.0/0            192.168.100.0/24     icmptype 0
+    ACCEPT     icmp --  0.0.0.0/0            192.168.100.0/24     state RELATED
+    ACCEPT     icmp --  0.0.0.0/0            192.168.200.0/24     icmptype 0
+    ACCEPT     icmp --  0.0.0.0/0            192.168.100.0/24     icmptype 8
+    ACCEPT     icmp --  0.0.0.0/0            192.168.200.0/24     icmptype 8
+    ACCEPT     icmp --  0.0.0.0/0            0.0.0.0/0            icmptype 8
 ~~~
 
 #### MEJORA 2: Utiliza nuevas cadenas para clasificar el tráfico.
+
+~~~
+iptables -P INPUT ACCEPT
+iptables -P OUTPUT ACCEPT
+iptables -P FORWARD ACCEPT
+
+iptables -F
+iptables -t nat -F
+iptables -Z
+iptables -t nat -Z
+
+iptables -N ROUTER_A_DMZ
+iptables -A OUTPUT -o eth2 -d 192.168.200.0/24 -j ROUTER_A_DMZ
+
+iptables -N ROUTER_A_LAN
+iptables -A OUTPUT -o eth1 -d 192.168.100.0/24 -j ROUTER_A_LAN
+
+iptables -N ROUTER_A_EXT
+iptables -A OUTPUT -o eth0 -j ROUTER_A_EXT
+
+iptables -N EXT_A_ROUTER
+iptables -A INPUT -i eth0 -j EXT_A_ROUTER
+
+iptables -N DMZ_A_ROUTER
+iptables -A INPUT -i eth2 -s 192.168.200.0/24 -j DMZ_A_ROUTER
+
+iptables -N DMZ_A_EXT
+iptables -A FORWARD -i eth2 -o eth0 -s 192.168.200.0/24 -j DMZ_A_EXT
+
+iptables -N DMZ_A_LAN
+iptables -A FORWARD -i eth2 -o eth1 -s 192.168.200.0/24 -j DMZ_A_LAN
+
+iptables -N EXT_A_DMZ
+iptables -A FORWARD -i eth0 -o eth2 -j EXT_A_DMZ
+
+iptables -N LAN_A_ROUTER
+iptables -A INPUT -i eth1 -s 192.168.100.0/24 -j LAN_A_ROUTER
+
+iptables -N LAN_A_EXT
+iptables -A FORWARD -i eth1 -o eth0 -s 192.168.100.0/24 -j LAN_A_EXT
+
+iptables -N LAN_A_DMZ
+iptables -A FORWARD -i eth1 -o eth2 -s 192.168.100.0/24 -j LAN_A_DMZ
+
+iptables -N EXT_A_LAN
+iptables -A FORWARD -i eth0 -o eth1 -j EXT_A_LAN
+
+iptables -A INPUT -p tcp --dport 22 -m mac --mac-source fa:16:3e:8f:8e:6e -j ACCEPT
+iptables -A OUTPUT -p tcp --sport 22 -j ACCEPT
+
+iptables -P INPUT DROP
+iptables -P OUTPUT DROP
+iptables -P FORWARD DROP
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+iptables -t nat -A PREROUTING -i eth0 -p tcp -m tcp --dport 2222 -j REDIRECT --to-ports 22
+
+iptables -t nat -A PREROUTING -i eth0 -p tcp -m tcp --dport 22 -j DNAT --to-destination 127.0.0.1:22
+
+iptables -A LAN_A_ROUTER -p tcp --dport 22 -j ACCEPT
+iptables -A ROUTER_A_LAN -p tcp --sport 22 -j ACCEPT
+
+iptables -A DMZ_A_ROUTER -p tcp --dport 22 -j ACCEPT
+iptables -A ROUTER_A_DMZ -p tcp --sport 22 -j ACCEPT
+
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+
+iptables -A DMZ_A_ROUTER -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+iptables -A ROUTER_A_DMZ -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+
+iptables -A LAN_A_ROUTER -p icmp -m icmp --icmp-type echo-request -j REJECT --reject-with icmp-port-unreachable
+
+iptables -A ROUTER_A_LAN -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+iptables -A ROUTER_A_LAN -p icmp -m state --state RELATED -j ACCEPT
+iptables -A ROUTER_A_LAN -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+iptables -A LAN_A_ROUTER -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+
+iptables -A ROUTER_A_DMZ -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+iptables -A DMZ_A_ROUTER -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+
+iptables -A ROUTER_A_EXT -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+iptables -A EXT_A_ROUTER -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+
+iptables -A DMZ_A_LAN -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A LAN_A_DMZ -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
+iptables -A DMZ_A_LAN -p icmp -m icmp --icmp-type echo-request -j ACCEPT
+iptables -A LAN_A_DMZ -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
+
+iptables -A LAN_A_DMZ -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A DMZ_A_LAN -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
+
+iptables -t nat -A POSTROUTING -s 192.168.100.0/24 -o eth0 -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 192.168.200.0/24 -o eth0 -j MASQUERADE
+
+iptables -A LAN_A_EXT -p icmp -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A EXT_A_LAN -p icmp -m state --state ESTABLISHED -j ACCEPT
+
+iptables -A LAN_A_EXT -p tcp -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A EXT_A_LAN -p tcp -m multiport --sports 80,443 -m state --state ESTABLISHED -j ACCEPT
+iptables -A LAN_A_EXT -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A EXT_A_LAN -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+
+iptables -A DMZ_A_EXT -p tcp -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A EXT_A_DMZ -p tcp -m multiport --sports 80,443 -m state --state ESTABLISHED -j ACCEPT
+iptables -A DMZ_A_EXT -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A EXT_A_DMZ -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
+
+iptables -A EXT_A_DMZ -p tcp -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A DMZ_A_EXT -p tcp -m multiport --sports 80,443 -m state --state ESTABLISHED -j ACCEPT
+
+iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 21 -j DNAT --to 192.168.200.10:21
+iptables -t nat -A POSTROUTING -o eth2 -p tcp --dport 21 -d 192.168.200.10 -j SNAT --to 192.168.200.2
+iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 20 -j DNAT --to 192.168.200.10:21
+iptables -t nat -A POSTROUTING -o eth2 -p tcp --dport 20 -d 192.168.200.10 -j SNAT --to 192.168.200.2
+iptables -A EXT_A_DMZ -p tcp --syn --dport 21 -m conntrack --ctstate NEW -j ACCEPT
+iptables -A EXT_A_DMZ -i eth0 -o eth2 -p tcp --syn --dport 20 -m conntrack --ctstate NEW -j ACCEPT
+iptables -A EXT_A_DMZ -i eth0 -o eth2 -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A DMZ_A_EXT -i eth2 -o eth0 -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+iptables -A LAN_A_DMZ -p tcp -m multiport --dports 80,443 -d 192.168.200.10 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A DMZ_A_LAN -p tcp -m multiport --sports 80,443 -s 192.168.200.10 -m state --state ESTABLISHED -j ACCEPT
+
+iptables -A LAN_A_DMZ -p tcp --syn --dport 21 -m conntrack --ctstate NEW -j ACCEPT
+iptables -A LAN_A_DMZ -p tcp --syn --dport 20 -m conntrack --ctstate NEW -j ACCEPT
+iptables -A LAN_A_DMZ -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A DMZ_A_LAN -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+iptables -A LAN_A_DMZ -p tcp --dport 25 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A DMZ_A_LAN -p tcp --sport 25 -m state --state ESTABLISHED -j ACCEPT
+
+iptables -A DMZ_A_LAN -p tcp --dport 3306 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A LAN_A_DMZ -p tcp --sport 3306 -m state --state ESTABLISHED -j ACCEPT
+~~~
 
 #### MEJORA 3: Consruye el cortafuego utilizando nftables.
