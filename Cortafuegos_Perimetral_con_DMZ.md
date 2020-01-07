@@ -581,27 +581,11 @@ Do you want to continue? [Y/n] y
 
 ### Tarea 12. Configura la máquina router-fw para que los servicios web y ftp sean accesibles desde el exterior.
 
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
+> ### Próximamente.
 
 ### Tarea 13. El servidor web y el servidor ftp deben ser accesible desde la LAN y desde el exterior.
 
-##### Reglas
-~~~
-
-~~~
-
-##### Comprobación
-~~~
-
-~~~
+> ### Próximamente.
 
 ### Tarea 14. El servidor de correos sólo debe ser accesible desde la LAN.
 
@@ -938,140 +922,7 @@ debian@router-fw:~$ sudo iptables -n -L
 
 #### MEJORA 2: Utiliza nuevas cadenas para clasificar el tráfico.
 
-~~~
-iptables -P INPUT ACCEPT
-iptables -P OUTPUT ACCEPT
-iptables -P FORWARD ACCEPT
-
-iptables -F
-iptables -t nat -F
-iptables -Z
-iptables -t nat -Z
-
-iptables -N ROUTER_A_DMZ
-iptables -A OUTPUT -o eth2 -d 192.168.200.0/24 -j ROUTER_A_DMZ
-
-iptables -N ROUTER_A_LAN
-iptables -A OUTPUT -o eth1 -d 192.168.100.0/24 -j ROUTER_A_LAN
-
-iptables -N ROUTER_A_EXT
-iptables -A OUTPUT -o eth0 -j ROUTER_A_EXT
-
-iptables -N EXT_A_ROUTER
-iptables -A INPUT -i eth0 -j EXT_A_ROUTER
-
-iptables -N DMZ_A_ROUTER
-iptables -A INPUT -i eth2 -s 192.168.200.0/24 -j DMZ_A_ROUTER
-
-iptables -N DMZ_A_EXT
-iptables -A FORWARD -i eth2 -o eth0 -s 192.168.200.0/24 -j DMZ_A_EXT
-
-iptables -N DMZ_A_LAN
-iptables -A FORWARD -i eth2 -o eth1 -s 192.168.200.0/24 -j DMZ_A_LAN
-
-iptables -N EXT_A_DMZ
-iptables -A FORWARD -i eth0 -o eth2 -j EXT_A_DMZ
-
-iptables -N LAN_A_ROUTER
-iptables -A INPUT -i eth1 -s 192.168.100.0/24 -j LAN_A_ROUTER
-
-iptables -N LAN_A_EXT
-iptables -A FORWARD -i eth1 -o eth0 -s 192.168.100.0/24 -j LAN_A_EXT
-
-iptables -N LAN_A_DMZ
-iptables -A FORWARD -i eth1 -o eth2 -s 192.168.100.0/24 -j LAN_A_DMZ
-
-iptables -N EXT_A_LAN
-iptables -A FORWARD -i eth0 -o eth1 -j EXT_A_LAN
-
-iptables -A INPUT -p tcp --dport 22 -m mac --mac-source fa:16:3e:8f:8e:6e -j ACCEPT
-iptables -A OUTPUT -p tcp --sport 22 -j ACCEPT
-
-iptables -P INPUT DROP
-iptables -P OUTPUT DROP
-iptables -P FORWARD DROP
-
-echo 1 > /proc/sys/net/ipv4/ip_forward
-
-iptables -t nat -A PREROUTING -i eth0 -p tcp -m tcp --dport 2222 -j REDIRECT --to-ports 22
-
-iptables -t nat -A PREROUTING -i eth0 -p tcp -m tcp --dport 22 -j DNAT --to-destination 127.0.0.1:22
-
-iptables -A LAN_A_ROUTER -p tcp --dport 22 -j ACCEPT
-iptables -A ROUTER_A_LAN -p tcp --sport 22 -j ACCEPT
-
-iptables -A DMZ_A_ROUTER -p tcp --dport 22 -j ACCEPT
-iptables -A ROUTER_A_DMZ -p tcp --sport 22 -j ACCEPT
-
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A OUTPUT -o lo -j ACCEPT
-
-iptables -A DMZ_A_ROUTER -p icmp -m icmp --icmp-type echo-request -j ACCEPT
-iptables -A ROUTER_A_DMZ -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
-
-iptables -A LAN_A_ROUTER -p icmp -m icmp --icmp-type echo-request -j REJECT --reject-with icmp-port-unreachable
-
-iptables -A ROUTER_A_LAN -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
-iptables -A ROUTER_A_LAN -p icmp -m state --state RELATED -j ACCEPT
-iptables -A ROUTER_A_LAN -p icmp -m icmp --icmp-type echo-request -j ACCEPT
-iptables -A LAN_A_ROUTER -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
-
-iptables -A ROUTER_A_DMZ -p icmp -m icmp --icmp-type echo-request -j ACCEPT
-iptables -A DMZ_A_ROUTER -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
-
-iptables -A ROUTER_A_EXT -p icmp -m icmp --icmp-type echo-request -j ACCEPT
-iptables -A EXT_A_ROUTER -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
-
-iptables -A DMZ_A_LAN -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A LAN_A_DMZ -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
-iptables -A DMZ_A_LAN -p icmp -m icmp --icmp-type echo-request -j ACCEPT
-iptables -A LAN_A_DMZ -p icmp -m icmp --icmp-type echo-reply -j ACCEPT
-
-iptables -A LAN_A_DMZ -p tcp --dport 22 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A DMZ_A_LAN -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
-
-iptables -t nat -A POSTROUTING -s 192.168.100.0/24 -o eth0 -j MASQUERADE
-iptables -t nat -A POSTROUTING -s 192.168.200.0/24 -o eth0 -j MASQUERADE
-
-iptables -A LAN_A_EXT -p icmp -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A EXT_A_LAN -p icmp -m state --state ESTABLISHED -j ACCEPT
-
-iptables -A LAN_A_EXT -p tcp -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A EXT_A_LAN -p tcp -m multiport --sports 80,443 -m state --state ESTABLISHED -j ACCEPT
-iptables -A LAN_A_EXT -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A EXT_A_LAN -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
-
-iptables -A DMZ_A_EXT -p tcp -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A EXT_A_DMZ -p tcp -m multiport --sports 80,443 -m state --state ESTABLISHED -j ACCEPT
-iptables -A DMZ_A_EXT -p udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A EXT_A_DMZ -p udp --sport 53 -m state --state ESTABLISHED -j ACCEPT
-
-iptables -A EXT_A_DMZ -p tcp -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A DMZ_A_EXT -p tcp -m multiport --sports 80,443 -m state --state ESTABLISHED -j ACCEPT
-
-iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 21 -j DNAT --to 192.168.200.10:21
-iptables -t nat -A POSTROUTING -o eth2 -p tcp --dport 21 -d 192.168.200.10 -j SNAT --to 192.168.200.2
-iptables -t nat -A PREROUTING -i eth0 -p tcp --dport 20 -j DNAT --to 192.168.200.10:21
-iptables -t nat -A POSTROUTING -o eth2 -p tcp --dport 20 -d 192.168.200.10 -j SNAT --to 192.168.200.2
-iptables -A EXT_A_DMZ -p tcp --syn --dport 21 -m conntrack --ctstate NEW -j ACCEPT
-iptables -A EXT_A_DMZ -i eth0 -o eth2 -p tcp --syn --dport 20 -m conntrack --ctstate NEW -j ACCEPT
-iptables -A EXT_A_DMZ -i eth0 -o eth2 -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A DMZ_A_EXT -i eth2 -o eth0 -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-
-iptables -A LAN_A_DMZ -p tcp -m multiport --dports 80,443 -d 192.168.200.10 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A DMZ_A_LAN -p tcp -m multiport --sports 80,443 -s 192.168.200.10 -m state --state ESTABLISHED -j ACCEPT
-
-iptables -A LAN_A_DMZ -p tcp --syn --dport 21 -m conntrack --ctstate NEW -j ACCEPT
-iptables -A LAN_A_DMZ -p tcp --syn --dport 20 -m conntrack --ctstate NEW -j ACCEPT
-iptables -A LAN_A_DMZ -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A DMZ_A_LAN -p tcp -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-
-iptables -A LAN_A_DMZ -p tcp --dport 25 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A DMZ_A_LAN -p tcp --sport 25 -m state --state ESTABLISHED -j ACCEPT
-
-iptables -A DMZ_A_LAN -p tcp --dport 3306 -m state --state NEW,ESTABLISHED -j ACCEPT
-iptables -A LAN_A_DMZ -p tcp --sport 3306 -m state --state ESTABLISHED -j ACCEPT
-~~~
+> ### Próximamente.
 
 #### MEJORA 3: Consruye el cortafuego utilizando nftables.
 
